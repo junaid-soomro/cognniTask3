@@ -1,7 +1,7 @@
 const vocabCol = require("./Schema/vocabCollection");
 const inputText = require("./inputText");
 
-let vocabs;
+let vocabs = null;
 vocabCol.findOne({}).then((data) => (vocabs = data));
 
 (async () => {
@@ -22,36 +22,48 @@ vocabCol.findOne({}).then((data) => (vocabs = data));
       }
     }, 5000);
   });
-  let dictOfVocab = {};
+  let tokenizedText = inputText; //storing tokenized text separately.
+
+  const vocabGenerator = { regex: {}, text: {} }; //term types
 
   const uniqueWords = [...new Set(extractWordsFromString(inputText))];
 
+  //Here we create our unique vocabs object having array of string terms pushed to dictOfVocabs.
   vocabs.vocabCollection.map((vocab) => {
-    const firstWordInTerm = extractWordsFromString(vocab?.term, true);
-    if (!Array.isArray(dictOfVocab[firstWordInTerm])) {
-      dictOfVocab[firstWordInTerm] = [];
+    const { termType, term, token } = vocab;
+    const firstWordInTerm = extractWordsFromString(term, true);
+    if (!Array.isArray(vocabGenerator[termType][firstWordInTerm])) {
+      vocabGenerator[termType][firstWordInTerm] = [];
     }
 
     //making sure only unique vocabs are pushed
-    if (!(vocab?.term in dictOfVocab[firstWordInTerm])) {
-      dictOfVocab[firstWordInTerm].push(vocab?.term);
+    if (!(term in vocabGenerator[termType][firstWordInTerm])) {
+      vocabGenerator[termType][firstWordInTerm].push(term);
     }
   });
 
+  //Here we find our unique terms found in the inputText
   const uniqueTerms = [];
-  for (let i = 0; i < uniqueWords.length; i++) {
-    if (dictOfVocab[uniqueWords[i]]) {
-      const termMatched = dictOfVocab[uniqueWords[i]].filter((term) =>
-        inputText.includes(term)
-      );
-
-      if (termMatched.length > 0) {
-        termMatched.forEach((item) =>
-          !(item in uniqueTerms) ? uniqueTerms.push(item) : null
+  Object.keys(vocabGenerator).map(vocabType => {
+    for (let i = 0; i < uniqueWords.length; i++) {
+      if (vocabGenerator[vocabType][uniqueWords[i]]) {
+        const termMatched = vocabGenerator[vocabType][uniqueWords[i]].filter((term) =>
+          inputText.includes(term)
         );
+  
+        if (termMatched.length > 0) {
+          termMatched.forEach((item) => {
+            if(!(item in uniqueTerms)) {
+              tokenizedText.replaceAll(tokenizedText, item, )
+              uniqueTerms.push(item);
+            } 
+            
+
+          });
+        }
       }
     }
-  }
+  })
 
   //Now we fetch tokens from db.
   const matchingTermsTokens = await vocabCol.aggregate([
@@ -71,15 +83,16 @@ vocabCol.findOne({}).then((data) => (vocabs = data));
       $group: {
         _id: null,
         token: {
-          $push: "$vocabCollection.token",
+          $push: {
+            token: "$vocabCollection.token",
+            term: "$vocabCollection.term",
+          },
         },
       },
     },
   ]);
 
-  let finalData = [];
-  let uniqueTokenTermCount = 0;
-  let uniqueTokenTerms = [];
+  let finalData = {};
   let queriedData;
 
   if (matchingTermsTokens && Array.isArray(matchingTermsTokens)) {
@@ -87,26 +100,13 @@ vocabCol.findOne({}).then((data) => (vocabs = data));
       "token" in matchingTermsTokens[0] ? matchingTermsTokens[0]["token"] : [];
   }
 
-  for (let i = 0; i < queriedData.length; i++) {
-    //find all the terms for this token
-    for (let j = 0; j < vocabs.vocabCollection.length; j++) {
-      if (
-        vocabs.vocabCollection[j]["token"] == queriedData[i] &&
-        !(vocabs.vocabCollection[j]["term"] in uniqueTokenTerms)
-      ) {
-        //count number of unique terms for each token
-        uniqueTokenTermCount++;
-        uniqueTokenTerms.push(vocabs.vocabCollection[j]["term"]);
-      }
+  queriedData.map(({ token }) => {
+    if (token in finalData) {
+      finalData[token] += 1;
+    } else {
+      finalData[token] = 1;
     }
-    finalData.push({
-      token: queriedData[i],
-      uniqueTermCountForToken: uniqueTokenTermCount,
-      top50TermsForToken: uniqueTokenTerms.slice(0, 49),
-    });
-    uniqueTokenTermCount = 0;
-    uniqueTokenTerms = [];
-  }
+  });
 
   console.log("DATA PROCESSED..", finalData);
 })();

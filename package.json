@@ -17,6 +17,9 @@
   },
   "homepage": "https://github.com/junaid-soomro/cognniTask3#readme",
   "dependencies": {
+    "@azure/storage-blob": "^12.9.0",
+    "@shieldox/storage-library": "^0.47.1",
+    "azure-storage": "^2.10.7",
     "dotenv": "^16.0.0",
     "mongoose": "^6.2.6"
   }
